@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+    <http:listener-config name="craft-onlineshopping-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8081" />
+    </http:listener-config>
+    <apikit:config name="craft-onlineshopping-config" api="resource::0dd791fe-c2b3-4935-a793-1bc906f79d10:craft-onlineshopping:1.0.1:raml:zip:craft-onlineshopping.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="deaefde6-395b-4d1e-a59e-dde8259d6820" >
+		<http:request-connection host="localhost" port="80" />
+	</http:request-config>
+	<flow name="craft-onlineshopping-main">
+        <http:listener config-ref="craft-onlineshopping-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="craft-onlineshopping-config" />
+    </flow>
+    <flow name="craft-onlineshoppingFlow" doc:id="4fcf46e6-d4d7-46f3-ae41-d6778f1af8f3" >
+		<http:listener doc:name="Listener" doc:id="a49694bc-951b-43e1-a08e-53554648b606" config-ref="craft-onlineshopping-httpListenerConfig" path="/error">
+			<http:error-response >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<http:request method="GET" doc:name="Request" doc:id="924ef408-6e4b-44fb-b32b-01e89e5423bd" config-ref="HTTP_Request_configuration" path="/abc"/>
+	</flow>
+	<flow name="craft-onlineshopping-console">
+        <http:listener config-ref="craft-onlineshopping-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="craft-onlineshopping-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="get:\category:craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[
+  {
+    department: "electronics",
+    "type": "laptop",
+    brand: "dell",
+    itemId: 2435,
+    price: "\$550"
+  }, 
+  {
+    department: "electronics",
+    "type": "laptop",
+    brand: "dell",
+    itemId: 2435,
+    price: "\$550"
+  }
+]]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\orders:craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[
+  {
+    orderId: 132,
+    userId: 123,
+    addressId: 201,
+    discountId: 3,
+    created: "2019-05-12",
+    modified: "2019-05-12",
+    status: "shipped",
+    amount: 550
+  }, 
+  {
+    orderId: 132,
+    userId: 123,
+    addressId: 201,
+    discountId: 3,
+    created: "2019-05-12",
+    modified: "2019-05-12",
+    status: "shipped",
+    amount: 550
+  }
+]]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\products:craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[
+  {
+    name: "Dell",
+    description: "Dell laptop",
+    price: 3456,
+    productId: 123,
+    categoryId: 12,
+    vedio_url: "dell.com"
+  }, 
+  {
+    name: "Dell",
+    description: "Dell laptop",
+    price: 3456,
+    productId: 123,
+    categoryId: 12,
+    vedio_url: "dell.com"
+  }
+]]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="Copy_of_On Error Propagate" doc:id="22e62c8b-ea47-458f-976e-670c540517db" type="APIKIT:BAD_REQUEST">
+				<set-variable value="404" doc:name="Copy_of_Copy_of_Gateway Timeout" doc:id="c2dc0c33-95e7-4087-a1e1-8dc8e29f33a6" variableName="httpStatus" />
+				<ee:transform doc:name="Copy_of_Copy_of_Copy_of_Dependency error mapping" doc:id="5cb0a987-a329-411a-acf9-d3c5bcbb859b" >
+					<ee:message />
+					<ee:variables >
+						<ee:set-variable variableName="errorMapping" ><![CDATA[%dw 2.0
+output application/json
+var errorPayload = error.errorMessage.payload
+---
+{
+	errorType: {
+		namespace: errorPayload.errorType.namespace default error.errorType.namespace,
+		identifier: errorPayload.errorType.identifier default error.errorType.identifier
+	},
+	description: errorPayload.description default "Unknown error in dependency. Check logs for details",
+	(details: errorPayload.details) if (errorPayload.details?),
+	(source: errorPayload.source) if (errorPayload.source?)
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<flow-ref doc:name="Copy_of_Copy_of_handle-error" doc:id="039180df-48ed-4549-84e4-cfa6601aab5b" name="handle-error" />
+			</on-error-propagate>
+		</error-handler>
+    </flow>
+    <flow name="get:\users:craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[
+  {
+    firstName: "John",
+    lastName: "Doe",
+    age: 18,
+    address: "1234 win way dr",
+    city: "decatur",
+    state: "Georgia",
+    postalCode: 12345
+  }, 
+  {
+    firstName: "John",
+    lastName: "Doe",
+    age: 18,
+    address: "1234 win way dr",
+    city: "decatur",
+    state: "Georgia",
+    postalCode: 12345
+  }
+]]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\category\(catgoryId):craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core">
+            <ee:variables>
+                <ee:set-variable variableName="catgoryId">attributes.uriParams.'catgoryId'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  department: "electronics",
+  "type": "laptop",
+  brand: "dell",
+  itemId: 2435,
+  price: "\$550"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\orders\(orderID):craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core">
+            <ee:variables>
+                <ee:set-variable variableName="orderID">attributes.uriParams.'orderID'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  orderId: 132,
+  userId: 123,
+  addressId: 201,
+  discountId: 3,
+  created: "2019-05-12",
+  modified: "2019-05-12",
+  status: "shipped",
+  amount: 550
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\products\(productID):craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core">
+            <ee:variables>
+                <ee:set-variable variableName="productID">attributes.uriParams.'productID'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  name: "Dell",
+  description: "Dell laptop",
+  price: 3456,
+  productId: 123,
+  categoryId: 12,
+  vedio_url: "dell.com"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\users\(userId):craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core">
+            <ee:variables>
+                <ee:set-variable variableName="userId">attributes.uriParams.'userId'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  firstName: "John",
+  lastName: "Doe",
+  age: 18,
+  address: "1234 win way dr",
+  city: "decatur",
+  state: "Georgia",
+  postalCode: 12345
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="post:\orders:craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  orderid: 1542,
+  amount: "5000"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="post:\users:craft-onlineshopping-config">
+        <ee:transform xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  uid: 14585
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+</mule>

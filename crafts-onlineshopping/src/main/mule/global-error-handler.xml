@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+       xmlns:json-logger="http://www.mulesoft.org/schema/mule/json-logger"
+       xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/json-logger http://www.mulesoft.org/schema/mule/json-logger/current/mule-json-logger.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<error-handler name="global-error-handler" doc:id="e1a23b33-acc0-4624-ac57-b5df14f1c51e" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="50f7216e-8b9a-487a-b15c-1c3ed43ecd69" type="CONNECTIVITY" >
+			<set-variable value="504" doc:name="Gateway Timeout" doc:id="0005e3d4-e1e5-4899-a7df-f000c48a83ba" variableName="httpStatus" />
+			<ee:transform doc:name="Copy_of_Dependency error mapping" doc:id="e20b82e0-5aa5-4217-aad9-a425a4031ea6">
+				<ee:message />
+				<ee:variables>
+					<ee:set-variable variableName="errorMapping"><![CDATA[%dw 2.0
+output application/json
+var errorPayload = error.errorMessage.payload
+---
+{
+	errorType: {
+		namespace: errorPayload.errorType.namespace default error.errorType.namespace,
+		identifier: errorPayload.errorType.identifier default error.errorType.identifier
+	},
+	description: errorPayload.description default "Unknown error in dependency. Check logs for details",
+	(details: errorPayload.details) if (errorPayload.details?),
+	(source: errorPayload.source) if (errorPayload.source?)
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<flow-ref doc:name="handle-error" doc:id="48d53919-c0c7-48d4-94de-ee1f69340c82" name="handle-error" />
+		
+</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="10655013-8750-4a8f-b40f-58a2d7e1b514" type="APIKIT:BAD_REQUEST" >
+			<set-variable value="400" doc:name="Copy_of_Gateway Timeout" doc:id="1e62d864-0274-40bb-abf2-5f0cb12792cf" variableName="httpStatus" />
+			<ee:transform doc:name="Copy_of_Copy_of_Dependency error mapping" doc:id="ec0b5a28-dbcf-4b4b-8e81-5ccf6630e179" >
+				<ee:message />
+				<ee:variables >
+					<ee:set-variable variableName="errorMapping" ><![CDATA[%dw 2.0
+output application/json
+var errorPayload = error.errorMessage.payload
+---
+{
+	errorType: {
+		namespace: errorPayload.errorType.namespace default error.errorType.namespace,
+		identifier: errorPayload.errorType.identifier default error.errorType.identifier
+	},
+	description: "Received request is wrong, please send correct request",
+	(details: errorPayload.details) if (errorPayload.details?),
+	(source: errorPayload.source) if (errorPayload.source?)
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="Copy_of_Error Response" doc:id="877d55d6-b951-4377-8534-53dd390906a1" >
+				<ee:message />
+				<ee:variables >
+					<ee:set-variable variableName="errorResponse" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	node: p('logger.application.name'),
+	code: vars.httpStatus,
+	correlationId: correlationId
+} ++ 
+if (vars.errorMapping?) {
+	errorType: {
+		namespace: vars.errorMapping.errorType.namespace,
+		identifier: vars.errorMapping.errorType.identifier
+	},
+	description: vars.errorMapping.description,
+	(details: vars.errorMapping.details) if (vars.errorMapping.details?),
+	(source: vars.errorMapping.source) if (vars.errorMapping.source?)
+}
+else {
+	errorType: {
+		namespace: error.errorType.namespace,
+		identifier: error.errorType.identifier
+	},
+	description: error.description,
+	(details: error.detailedDescription) if(error.description != error.detailedDescription)
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<json-logger:logger doc:name="Copy_of_Logger" doc:id="b7dbb8c6-29df-48f2-9081-4bf4f37ee429" config-ref="JSON-logger-config" message='#["Flow execution failed due to: " ++ vars.errorResponse.description]' tracePoint="EXCEPTION" priority="ERROR" >
+				<json-logger:content ><![CDATA[#[import modules::JSONLoggerModule output application/json ---
+{
+    payload: JSONLoggerModule::stringifyNonJSON(payload),
+    error: JSONLoggerModule::stringifyNonJSON(vars.errorResponse),
+    (errorMessage: error.errorMessage) if (!isEmpty(error.errorMessage))
+}]]]></json-logger:content>
+			</json-logger:logger>
+			<ee:transform doc:name="Copy_of_Transform Message" doc:id="bc4e6f88-2b9b-4d4f-bb54-b5fce28be100" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.errorResponse]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="fb5f2347-f53f-45a2-9866-90aecf78819a" type="ANY">
+			<choice doc:name="Choice" doc:id="8f3c0798-3670-43de-a8a6-9e1cb38048b6">
+				<when expression="#[not isEmpty(error.errorMessage)]">
+					<set-variable value="#[error.errorMessage.attributes.statusCode]" doc:name="Copy status code from error response" doc:id="c8075a53-0314-4b31-8bf8-6b98343e125c" variableName="httpStatus" />
+					<ee:transform doc:name="Dependency error mapping" doc:id="48d75c4c-34a7-45f9-9d9f-70e76c158e95">
+						<ee:message>
+						</ee:message>
+						<ee:variables>
+							<ee:set-variable variableName="errorMapping"><![CDATA[%dw 2.0
+output application/json
+var errorPayload = error.errorMessage.payload
+---
+{
+	errorType: {
+		namespace: errorPayload.errorType.namespace default error.errorType.namespace,
+		identifier: errorPayload.errorType.identifier default error.errorType.identifier
+	},
+	description: errorPayload.description default "Unknown error in dependency. Check logs for details",
+	(details: errorPayload.details) if (errorPayload.details?),
+	(source: errorPayload.source) if (errorPayload.source?)
+}]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+				</when>
+				<otherwise>
+					<ee:transform doc:name="Local error http status" doc:id="dcc5460a-8bea-47f0-8102-3ebdbc0d2ed5">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="httpStatus"><![CDATA[%dw 2.0
+output application/json
+---
+if (error.errorType.identifier == 'BAD_REQUEST')
+	400
+else if (error.errorType.identifier == 'UNAUTHORIZED')
+	401
+else if (error.errorType.identifier == 'FORBIDDEN')
+	403
+else if (error.errorType.identifier == 'NOT_FOUND')
+	404
+else if (error.errorType.identifier == 'METHOD_NOT_ALLOWED')
+	405
+else if (error.errorType.identifier == 'NOT_ACCEPTABLE')
+	406
+else if (error.errorType.identifier == 'UNSUPPORTED_MEDIA_TYPE')
+	415
+else if (error.errorType.identifier == 'LOCKED')
+	423
+else if (error.errorType.identifier == 'TOO_MANY_REQUESTS')
+	429
+else if (error.errorType.identifier == 'NOT_IMPLEMENTED')
+	501
+else
+	500
+]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+				</otherwise>
+			</choice>
+			<flow-ref doc:name="handle-error" doc:id="e2ba2737-c302-47eb-b923-2778b44a8e5e" name="handle-error" />
+		</on-error-propagate>
+	
+</error-handler>
+	<sub-flow name="handle-error" doc:id="96261a64-e87c-4202-af80-8a2722e61afa">
+		<ee:transform doc:name="Error Response" doc:id="ccedffba-4dda-4e5c-bcd1-f9a377287d4f">
+			<ee:message>
+				</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="errorResponse" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	node: p('logger.application.name'),
+	code: vars.httpStatus,
+	correlationId: correlationId
+} ++ 
+if (vars.errorMapping?) {
+	errorType: {
+		namespace: vars.errorMapping.errorType.namespace,
+		identifier: vars.errorMapping.errorType.identifier
+	},
+	description: vars.errorMapping.description,
+	(details: vars.errorMapping.details) if (vars.errorMapping.details?),
+	(source: vars.errorMapping.source) if (vars.errorMapping.source?)
+}
+else {
+	errorType: {
+		namespace: error.errorType.namespace,
+		identifier: error.errorType.identifier
+	},
+	description: error.description,
+	(details: error.detailedDescription) if(error.description != error.detailedDescription)
+}]]></ee:set-variable>
+			</ee:variables>
+			</ee:transform>
+		<json-logger:logger doc:name="Logger" doc:id="cb8b7f83-85c9-45d1-8b45-7870c7fa5ff9" config-ref="JSON-logger-config" message='#["Flow execution failed due to: " ++ vars.errorResponse.description]' priority="ERROR" tracePoint="EXCEPTION">
+			<json-logger:content ><![CDATA[#[import modules::JSONLoggerModule output application/json ---
+{
+    payload: JSONLoggerModule::stringifyNonJSON(payload),
+    error: JSONLoggerModule::stringifyNonJSON(vars.errorResponse),
+    (errorMessage: error.errorMessage) if (!isEmpty(error.errorMessage))
+}]]]></json-logger:content>
+		</json-logger:logger>
+		<ee:transform doc:name="Transform Message" doc:id="119ecc50-e9ea-424e-a8d5-69e5db6e7756" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.errorResponse]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="0430f3b8-2b96-4461-b1f6-c24f4c11bfb9" />
+	
+</sub-flow>
+</mule>

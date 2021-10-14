@@ -1,0 +1,8 @@
+logger:
+  application:
+    name: test
+  disabled:
+    fields: ""
+    
+mule:
+  env: dev
